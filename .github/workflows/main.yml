@@ -1,12 +1,60 @@
-# 4. Render Task Definition
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
+  ECS_SERVICE: ${{ secrets.ECS_SERVICE_NAME }}
+
+jobs:
+  build-and-deploy:
+    name: Build, Push, and Deploy to ECS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Configure AWS Credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 2. Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 3. Build and Tag Docker Image
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # 4. Render Task Definition (Updates image tag in the definition)
       - name: Render Task Definition
         id: render-task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          # Task Definition Family name, matching the prefix
-          task-definition: compliance-checker-demo-task 
-          # Container Name, matching the prefix
-          container-name: compliance-checker-demo-container 
+          # VERIFIED Task Definition Family Name
+          task-definition: compliance-checker-demo-task
+          # VERIFIED Container Name
+          container-name: compliance-checker-demo-container
           image: ${{ steps.build-image.outputs.IMAGE_URI }}
           output-task-definition: task-definition.json
 
