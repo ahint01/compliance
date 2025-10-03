@@ -1,1 +1,1 @@
-# compliance_checker
+# demonstration of django, docker, terraform, AWS (ECR, ECS, EC2) and github actions
