@@ -28,7 +28,8 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          # CRITICAL: Ensure this is 'us-east-2' based on your JSON
+          aws-region: ${{ env.AWS_REGION }} 
 
       # 2. Login to ECR
       - name: Login to Amazon ECR
@@ -46,30 +47,51 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # 4. Manual Task Definition Update (FIX: Replaced the failing action with AWS CLI + jq)
+      # 4. Manual Task Definition Update (FIXED CONTAINER NAME)
       - name: Fetch, Update Image, and Save Task Definition
         id: render-task-def
         env:
           IMAGE_URI: ${{ steps.build-image.outputs.IMAGE_URI }}
         run: |
-          # 1. Fetch the latest task definition JSON from ECS
-          aws ecs describe-task-definition \
-            --task-definition compliance-checker-demo-task \
-            --query taskDefinition > task-definition-raw.json
-
-          # 2. Clean the JSON (remove metadata) and inject the new image URI using 'jq'
-          #    We assume your service container is the first one (index 0) in the definitions array.
-          cat task-definition-raw.json | jq \
-            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .deregisteredAt, .registeredBy) | .containerDefinitions[0].image = env.IMAGE_URI' \
-            > task-definition.json
+          TASK_DEF_FAMILY="compliance-checker-demo-task"
+          CONTAINER_TO_UPDATE="compliance-checker-demo-django-container" 
+          NEW_IMAGE_URI="${{ steps.build-image.outputs.IMAGE_URI }}"
+          
+          echo "--- 1. Fetching Task Definition: $TASK_DEF_FAMILY ---"
+          
+          if ! aws ecs describe-task-definition \
+            --task-definition $TASK_DEF_FAMILY \
+            --query taskDefinition > task-definition-raw.json; then
+            echo "::error::AWS CLI failure in 'describe-task-definition'. Check IAM permissions."
+            exit 1 
+          fi
+          
+          if [ ! -s task-definition-raw.json ]; then
+            echo "::error::Task definition file is empty after fetch. Check AWS logs for hidden errors."
+            exit 1
+          fi
+          
+          echo "--- 2. Cleaning and Injecting New Image URI: $NEW_IMAGE_URI into Container: $CONTAINER_TO_UPDATE ---"
+          
+          JQ_EXPRESSION="
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .deregisteredAt, .registeredBy)
+            | .containerDefinitions |= map(
+                if .name == \"${CONTAINER_TO_UPDATE}\" then 
+                    .image = \"${NEW_IMAGE_URI}\" 
+                else 
+                    . 
+                end
+            )
+          "
+          
+          cat task-definition-raw.json | jq "${JQ_EXPRESSION}" > task-definition.json
             
-          echo "Updated task-definition.json created:"
-          cat task-definition.json # Output for verification
-
+          echo "--- 3. Updated task-definition.json created and ready for deployment. ---"
+          
       # 5. Deploy the updated Task Definition to the ECS Service
       - name: Deploy to Amazon ECS Service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: task-definition.json # Now points to the file created in Step 4
+          task-definition: task-definition.json
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
