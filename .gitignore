@@ -209,6 +209,7 @@ __marimo__/
 # Terraform
 # Local .terraform directories
 **/.terraform/*
+.terraform/
 
 # .tfstate files (sensitive and should be managed remotely)
 *.tfstate
