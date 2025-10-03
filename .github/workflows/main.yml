@@ -48,26 +48,28 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # 4. Deploy to ECS
-      - name: Render Task Definition
-        id: render-task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          # Use the 'family' name of your Task Definition on AWS
-          # You can find this in your ec2_service.tf or the AWS console
-          task-definition: compliance-task-definition
-          # This name MUST match the 'name' attribute in your ec2_service.tf container definition
-          container-name: compliance-checker-django-container
-          # The ECR image URI output from step 3
-          image: ${{ steps.build-image.outputs.IMAGE_URI }}
-          # This creates a NEW local file named 'task-definition.json'
-          output-task-definition: task-definition.json
+      # 4. Render Task Definition
+  # This action fetches the current Task Definition from AWS and inserts the new image URI into a local JSON file.
+    name: Render Task Definition
+    id: render-task-def
+    uses: aws-actions/amazon-ecs-render-task-definition@v1
+    with:
+      # This should be the 'family' name of your task definition (from Terraform)
+      task-definition: compliance-task-definition 
+      # This name MUST match the 'name' attribute in your container definition (from Terraform)
+      container-name: compliance-checker-django-container 
+      # Use the uniquely tagged image from step 3
+      image: ${{ steps.build-image.outputs.IMAGE_URI }}
+      # Create a temporary file to hold the updated task definition JSON
+      output-task-definition: task-definition.json
 
-      # 5. Deploy the updated Task Definition to the ECS Service
-      - name: Deploy to Amazon ECS Service
-        uses: aws-actions/amazon-ecs-deploy-service@v1
-        with:
-          # Reference the newly created local JSON file from the previous step
-          task-definition: task-definition.json
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
+  # 5. Deploy the updated Task Definition to the ECS Service
+  # This action takes the updated local JSON file and deploys it to the ECS Service.
+    name: Deploy to Amazon ECS Service
+    # THE CORRECT ACTION NAME IS USED HERE
+    uses: aws-actions/amazon-ecs-deploy-service@v1
+    with:
+      # Reference the newly created local JSON file
+      task-definition: task-definition.json
+      service: ${{ env.ECS_SERVICE }}
+      cluster: ${{ env.ECS_CLUSTER }}
