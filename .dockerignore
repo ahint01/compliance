@@ -1,0 +1,34 @@
+# Python bytecode
+*.pyc
+*.pyo
+__pycache__
+
+# Virtual environment directory
+venv/
+.venv/
+.env/
+
+# IDE/Editor files
+.vscode/
+.idea/
+
+# Operating System files
+.DS_Store
+
+# Git artifacts
+.git
+.gitignore
+
+# Terraform files (Keep infrastructure separate from app)
+terraform/
+.terraform/
+.terraform.lock.hcl
+
+# Local Database and media
+db.sqlite3
+/media
+/static_collected
+
+# Any locally generated logs or temp files
+*.log
+tmp/
