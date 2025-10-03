@@ -46,20 +46,21 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # 4. Render Task Definition (Updates image tag in the definition)
+      # 4. Render Task Definition (FIX: Switched to @v2 for 'output-task-definition')
       - name: Render Task Definition
         id: render-task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        # USE v2 to enable output-task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v2
         with:
-          # VERIFIED Task Definition Family Name
           task-definition: compliance-checker-demo-task
-          # VERIFIED Container Name
           container-name: compliance-checker-demo-container
           image: ${{ steps.build-image.outputs.IMAGE_URI }}
+          # This line is now supported by @v2
           output-task-definition: task-definition.json
 
-      # 5. Deploy the updated Task Definition to the ECS Service
+      # 5. Deploy the updated Task Definition to the ECS Service (FIX: Corrected action name)
       - name: Deploy to Amazon ECS Service
+        # Correct action name to resolve 'repository not found'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: task-definition.json
