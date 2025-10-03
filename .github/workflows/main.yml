@@ -60,7 +60,7 @@ jobs:
 
       # 5. Deploy the updated Task Definition to the ECS Service
       - name: Deploy to Amazon ECS Service
-        uses: aws-actions/amazon-ecs-deploy-service@v1
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: task-definition.json
           service: ${{ env.ECS_SERVICE }}
