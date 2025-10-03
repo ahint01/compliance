@@ -24,11 +24,6 @@ terraform/
 .terraform/
 .terraform.lock.hcl
 
-# Local Database and media
-db.sqlite3
-/media
-/static_collected
-
 # Any locally generated logs or temp files
 *.log
 tmp/

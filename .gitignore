@@ -232,3 +232,5 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+gitleaks_scan_results.json

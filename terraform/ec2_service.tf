@@ -110,7 +110,7 @@ resource "aws_ecs_task_definition" "django_app" {
   container_definitions = jsonencode([
     {
       name      = "${var.project_name}-django-container",
-      image     = "576366844090.dkr.ecr.us-east-2.amazonaws.com/compliance_checker:v2",
+      image     = "576366844090.dkr.ecr.us-east-2.amazonaws.com/compliance_checker:latest",
       cpu       = 256,
       memory    = 512,
       essential = true,
@@ -128,6 +128,17 @@ resource "aws_ecs_task_definition" "django_app" {
           "awslogs-stream-prefix" = "ecs"
         }
       }
+      "environment": [
+        {
+          "name": "ALLOWED_HOSTS_ENV",
+          # Use the identified EC2 resource name 'ecs_host'
+          "value": "${aws_instance.ecs_host.public_ip},localhost,127.0.0.1" 
+        },
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "compliance.settings"
+        }
+      ]
     }
   ])
   
