@@ -1,25 +1,13 @@
 name: Deploy to AWS ECS
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch: # Allows manual triggering from GitHub UI
-
-env:
-  # Reference GitHub Secrets configured in the previous step
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
-  ECS_SERVICE: ${{ secrets.ECS_SERVICE_NAME }}
+# ... (on: and env: blocks remain unchanged)
 
 jobs:
   build-and-deploy:
     name: Build, Push, and Deploy to ECS
     runs-on: ubuntu-latest
-    environment: production # Use a GitHub Environment for better tracking
+    environment: production
 
-    steps:
+    steps: # <-- Everything below this line must be indented
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -41,7 +29,7 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }} # Use the commit SHA as the unique tag
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           # Build using the Dockerfile in the root directory
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
@@ -49,27 +37,21 @@ jobs:
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       # 4. Render Task Definition
-  # This action fetches the current Task Definition from AWS and inserts the new image URI into a local JSON file.
-    name: Render Task Definition
-    id: render-task-def
-    uses: aws-actions/amazon-ecs-render-task-definition@v1
-    with:
-      # This should be the 'family' name of your task definition (from Terraform)
-      task-definition: compliance-task-definition 
-      # This name MUST match the 'name' attribute in your container definition (from Terraform)
-      container-name: compliance-checker-django-container 
-      # Use the uniquely tagged image from step 3
-      image: ${{ steps.build-image.outputs.IMAGE_URI }}
-      # Create a temporary file to hold the updated task definition JSON
-      output-task-definition: task-definition.json
+      - name: Render Task Definition
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          # Task Definition Family name, matching the prefix
+          task-definition: compliance-checker-demo-task 
+          # Container Name, matching the prefix
+          container-name: compliance-checker-demo-container 
+          image: ${{ steps.build-image.outputs.IMAGE_URI }}
+          output-task-definition: task-definition.json
 
-  # 5. Deploy the updated Task Definition to the ECS Service
-  # This action takes the updated local JSON file and deploys it to the ECS Service.
-    name: Deploy to Amazon ECS Service
-    # THE CORRECT ACTION NAME IS USED HERE
-    uses: aws-actions/amazon-ecs-deploy-service@v1
-    with:
-      # Reference the newly created local JSON file
-      task-definition: task-definition.json
-      service: ${{ env.ECS_SERVICE }}
-      cluster: ${{ env.ECS_CLUSTER }}
+      # 5. Deploy the updated Task Definition to the ECS Service
+      - name: Deploy to Amazon ECS Service
+        uses: aws-actions/amazon-ecs-deploy-service@v1
+        with:
+          task-definition: task-definition.json
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
