@@ -46,23 +46,30 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # 4. Render Task Definition (FIX: Switched to @v2 for 'output-task-definition')
-      - name: Render Task Definition
+      # 4. Manual Task Definition Update (FIX: Replaced the failing action with AWS CLI + jq)
+      - name: Fetch, Update Image, and Save Task Definition
         id: render-task-def
-        # USE v2 to enable output-task-definition
-        uses: aws-actions/amazon-ecs-render-task-definition@v2
-        with:
-          task-definition: compliance-checker-demo-task
-          container-name: compliance-checker-demo-container
-          image: ${{ steps.build-image.outputs.IMAGE_URI }}
-          # This line is now supported by @v2
-          output-task-definition: task-definition.json
+        env:
+          IMAGE_URI: ${{ steps.build-image.outputs.IMAGE_URI }}
+        run: |
+          # 1. Fetch the latest task definition JSON from ECS
+          aws ecs describe-task-definition \
+            --task-definition compliance-checker-demo-task \
+            --query taskDefinition > task-definition-raw.json
 
-      # 5. Deploy the updated Task Definition to the ECS Service (FIX: Corrected action name)
+          # 2. Clean the JSON (remove metadata) and inject the new image URI using 'jq'
+          #    We assume your service container is the first one (index 0) in the definitions array.
+          cat task-definition-raw.json | jq \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .deregisteredAt, .registeredBy) | .containerDefinitions[0].image = env.IMAGE_URI' \
+            > task-definition.json
+            
+          echo "Updated task-definition.json created:"
+          cat task-definition.json # Output for verification
+
+      # 5. Deploy the updated Task Definition to the ECS Service
       - name: Deploy to Amazon ECS Service
-        # Correct action name to resolve 'repository not found'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: task-definition.json
+          task-definition: task-definition.json # Now points to the file created in Step 4
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
